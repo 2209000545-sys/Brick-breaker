@@ -1,9 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 
+//animacion de fondo
 export default function Fondoanimado() {
   const colorAnim = useRef(new Animated.Value(0)).current;
-
+//animacion de fondo
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -16,7 +17,7 @@ export default function Fondoanimado() {
       ])
     ).start();
   }, []);
-
+//color de fondo 
   const backgroundColor = colorAnim.interpolate({
     inputRange: [0, 1, 2, 3, 4, 5],
     outputRange: ['rgba(102, 255, 204)', 'rgba(135, 206, 250)', 'rgba(240, 240, 240)','rgba(210, 125, 90)','rgba(34, 139, 34)','rgba(255, 255, 255)'], 
@@ -24,7 +25,7 @@ export default function Fondoanimado() {
 
   return <Animated.View style={[styles.background, { backgroundColor }]} />;
 }
-
+//estilos de fondo
 const styles = StyleSheet.create({
   background: {
     ...StyleSheet.absoluteFillObject, 
