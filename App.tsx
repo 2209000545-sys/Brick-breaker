@@ -9,6 +9,6 @@ export default function App() {
       <StatusBar hidden />
       <GameScreen />
     </SafeAreaView>
-    
+    //hola como estas, yo estoy muy bien, supe que vas al gym y me emociona vernos pronto
   );
 }
