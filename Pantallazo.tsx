@@ -10,7 +10,7 @@ import SoundManager, { initializeSounds, playHitSound, releaseSounds, playBackgr
 const { width, height } = Dimensions.get('window');
 
 const Paletaancho = 100;
-const Paletaalto = 160;
+const Paletaalto = 20;
 const tamanobola = 20;
 const Paletabaja = 40;
 
@@ -101,23 +101,25 @@ export default function GameScreen() {
         if (newY <= 0) dy *= -1;
 
         // Colisión con paleta
-        const paletaY = height - Paletabaja - Paletaalto;
-        const ballBottom = newY + tamanobola;
-        const ballCenterX = newX + tamanobola / 2;
+const paletaY = height - Paletabaja - Paletaalto;
+const ballBottom = newY + tamanobola;
+const ballCenterX = newX + tamanobola / 2;
 
-        const pegarpaleta =
-          ballBottom >= paletaY &&
-          newY <= paletaY + Paletaalto &&
-          ballCenterX >= paletaX &&
-          ballCenterX <= paletaX + Paletaancho;
+// Rebote solo en la parte superior de la paleta
+const pegarpaleta =
+  ballBottom >= paletaY &&          // toca la parte superior
+  ballBottom <= paletaY + 10 &&     // margen de 10px para evitar rebotes por debajo
+  ballCenterX >= paletaX &&
+  ballCenterX <= paletaX + Paletaancho;
 
-        if (pegarpaleta) {
-          dy = -Math.abs(dy) * 1.2;
-          newY = paletaY - tamanobola;
-          setParticleTrigger(true);
-          playHitSound();
-          setTimeout(() => setParticleTrigger(false), 100);
-        }
+if (pegarpaleta) {
+  dy = -Math.abs(dy) * 1.2;
+  newY = paletaY - tamanobola;
+  setParticleTrigger(true);
+  playHitSound();
+  setTimeout(() => setParticleTrigger(false), 100);
+}
+
 
         // Colisión con bloques
         let bloquesActualizados = [...bloques];
