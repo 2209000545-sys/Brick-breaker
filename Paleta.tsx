@@ -17,9 +17,15 @@ const styles = StyleSheet.create({
     bottom: paletaBottomOffset,
     width: paletaancho,
     height: paletaalto,
-    backgroundColor: '#67666dff',
-    borderColor: 'white',
-    borderWidth: 2,
+    backgroundColor: '#00D9FF',
+    borderColor: '#00FF88',
+    borderWidth: 3,
+    borderRadius: 8,
+    shadowColor: '#00D9FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
+    elevation: 8,
   },
 });
 

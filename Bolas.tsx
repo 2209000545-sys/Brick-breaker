@@ -16,10 +16,14 @@ const styles = StyleSheet.create({
     width: tamanobola,
     height: tamanobola,
     borderRadius: tamanobola / 2,
-    backgroundColor: 'black',
-    borderColor: 'white',
-    borderWidth: 2,
-    
+    backgroundColor: '#FFD700',
+    borderColor: '#FF1493',
+    borderWidth: 3,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 5,
   },
 });
 

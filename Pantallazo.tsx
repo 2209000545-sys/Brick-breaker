@@ -5,6 +5,7 @@ import Paddle from './Paleta';
 import Controls from './Controles';
 import ParticleEffect from './efectodeparticula';
 import Fondoanimado from './Fondoanimado';
+import SoundManager, { initializeSounds, playHitSound, releaseSounds, playBackgroundMusic, stopBackgroundMusic } from './SoundManager';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,14 +18,17 @@ const Bloqueancho = 56;
 const Bloquealto = 20;
 const columnas = 6;
 
+const blockColors = ['#FF006E', '#FB5607', '#FFBE0B', '#8338EC', '#3A86FF', '#06FFA5'];
+
 const crearBloques = (filas: number) => {
   return Array.from({ length: columnas * filas }).map((_, i) => {
     const col = i % columnas;
     const row = Math.floor(i / columnas);
     return {
       x: col * (Bloqueancho + 10) + 10,
-      y: row * (Bloquealto + 10) + 40,
+      y: row * (Bloquealto + 10) + 90,
       visible: true,
+      color: blockColors[(col + row) % blockColors.length],
     };
   });
 };
@@ -65,11 +69,28 @@ export default function GameScreen() {
     });
   };
 
+  // Inicializar sonidos (requiere instalar `react-native-sound` y reconstruir la app)
+  useEffect(() => {
+    initializeSounds();
+    return () => {
+      releaseSounds();
+    };
+  }, []);
+
+  // Control simple de música de fondo según el estado del juego
+  useEffect(() => {
+    if (gameState === 'playing') {
+      playBackgroundMusic();
+    } else {
+      stopBackgroundMusic();
+    }
+  }, [gameState]);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      if (gameState !== 'playing') return;
-
       setBola(prev => {
+        if (gameState !== 'playing') return prev;
+
         let newX = prev.x + prev.dx;
         let newY = prev.y + prev.dy;
         let dx = prev.dx;
@@ -91,9 +112,10 @@ export default function GameScreen() {
           ballCenterX <= paletaX + Paletaancho;
 
         if (pegarpaleta) {
-          dy = -Math.abs(dy) * 1.5;
+          dy = -Math.abs(dy) * 1.2;
           newY = paletaY - tamanobola;
           setParticleTrigger(true);
+          playHitSound();
           setTimeout(() => setParticleTrigger(false), 100);
         }
 
@@ -120,27 +142,24 @@ export default function GameScreen() {
           }
         });
 
-        if (colisionDetectada) {
-          // Use functional update to avoid stale state
+          if (colisionDetectada) {
           setBloques(() => bloquesActualizados);
           setScore(s => s + 1);
+          playHitSound();
         }
-
-        // Reinicio si cae
+        // Reinicio si cae: detener la bola y volver al menú
         if (newY >= height) {
-          // Al caer, guardar la puntuación y volver al menú principal
           setLastScore(prevScore => score);
           setGameState('menu');
-
-          // Restaurar bloques según dificultad seleccionada
           const rows = difficultySettings[difficulty].rows;
           setBloques(crearBloques(rows));
 
+          // Colocar la bola sobre la paleta y detenerla (dx=0, dy=0)
           return {
             x: paletaX + Paletaancho / 2 - tamanobola / 2,
             y: height - Paletabaja - Paletaalto - tamanobola,
-            dx: difficultySettings[difficulty].speed,
-            dy: -difficultySettings[difficulty].speed,
+            dx: 0,
+            dy: 0,
           };
         }
 
@@ -149,7 +168,7 @@ export default function GameScreen() {
     }, 16);
 
     return () => clearInterval(interval);
-  }, [paletaX, bloques, gameState, difficulty, score]);
+  }, [paletaX, difficulty]);
 
   return (
     <View style={styles.container}>
@@ -157,7 +176,9 @@ export default function GameScreen() {
       {gameState === 'playing' && (
         <View style={styles.scoreBar}>
           <Text style={styles.scoreText}>Puntuación: {score}</Text>
-          <Text style={styles.scoreText}>Dificultad: {difficulty}</Text>
+          <Text style={styles.scoreText}>
+            Dificultad: {difficulty === 'easy' ? 'Fácil' : difficulty === 'medium' ? 'Medio' : 'Difícil'}
+          </Text>
         </View>
       )}
       <Ball x={bola.x} y={bola.y} />
@@ -168,7 +189,7 @@ export default function GameScreen() {
             key={i}
             style={[
               styles.bloque,
-              { left: bloque.x, top: bloque.y },
+              { left: bloque.x, top: bloque.y, backgroundColor: (bloque as any).color || '#FF006E' },
             ]}
           />
         ) : null
@@ -218,16 +239,21 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: '#0a0e27',
   },
   bloque: {
     position: 'absolute',
     width: Bloqueancho,
     height: Bloquealto,
-    backgroundColor: 'rgba(0, 0, 0, 0.23)',
-    borderRadius: 4,
-    borderWidth: 1,
+    borderRadius: 6,
+    borderWidth: 2,
     borderColor: '#fff',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 5,
   },
   scoreBar: {
     position: 'absolute',
@@ -237,14 +263,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: '#FFD700',
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#FF1493',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 8,
   },
   scoreText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#0a0e27',
+    fontWeight: '800',
+    fontSize: 15,
   },
   menuOverlay: {
     position: 'absolute',
@@ -254,24 +288,28 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   menuBox: {
     width: '85%',
-    backgroundColor: '#111',
-    padding: 20,
-    borderRadius: 12,
+    backgroundColor: '#1a1f3a',
+    padding: 24,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#00D9FF',
   },
   menuTitle: {
-    color: '#fff',
-    fontSize: 20,
+    color: '#FFD700',
+    fontSize: 24,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   lastScore: {
-    color: '#ddd',
-    marginBottom: 12,
+    color: '#00FF88',
+    marginBottom: 16,
+    fontSize: 14,
+    fontWeight: '600',
   },
   menuButtons: {
     flexDirection: 'row',
@@ -279,16 +317,24 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   menuButton: {
-    backgroundColor: '#222',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    backgroundColor: '#FF006E',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     flex: 1,
     marginHorizontal: 6,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFBE0B',
+    shadowColor: '#FF006E',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 5,
   },
   menuButtonText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
