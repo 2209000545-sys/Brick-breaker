@@ -17,7 +17,7 @@ const styles = StyleSheet.create({
     bottom: paletaBottomOffset,
     width: paletaancho,
     height: paletaalto,
-    backgroundColor: '#00D9FF',
+    backgroundColor: '#09c2e3ff',
     borderColor: '#00FF88',
     borderWidth: 3,
     borderRadius: 8,
