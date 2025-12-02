@@ -69,7 +69,7 @@ export default function GameScreen() {
     });
   };
 
-  // Inicializar sonidos (requiere instalar `react-native-sound` y reconstruir la app)
+  // Inicializar sonidos 
   useEffect(() => {
     initializeSounds();
     return () => {
@@ -188,7 +188,6 @@ if (pegarpaleta) {
       {bloques.map((bloque, i) =>
         bloque.visible ? (
           <View
-            key={i}
             style={[
               styles.bloque,
               { left: bloque.x, top: bloque.y, backgroundColor: (bloque as any).color || '#FF006E' },

@@ -5,21 +5,27 @@ interface SoundManagerProps {
   isPlaying: boolean;
 }
 
-// ⚠️ En Android, setCategory no es necesario, pero no rompe nada
 Sound.setCategory('Playback');
 
 let backgroundMusic: Sound | null = null;
 let hitSoundPool: Array<Sound | null> = [];
-let hitPoolIndex = 0;
-const HIT_POOL_SIZE = 6;
+let victorySound: Sound | null = null;
 
-// Función genérica para cargar sonidos desde res/raw
+const victoryFile = 'victoria'; // ejemplo: victory.mp3
+
+// Lista de archivos de sonidos distintos (en res/raw, sin extensión)
+const hitFiles = [
+  'hit1',   // ejemplo: hit1.mp3
+  'hit2',   // ejemplo: hit2.mp3
+  'hit3',   // ejemplo: hit3.mp3
+  'hit4'    // ejemplo: hit4.mp3
+];
+
 const loadSound = (
   filename: string,
   onLoaded: (sound: Sound) => void,
   onError: (error: any) => void
 ) => {
-  console.log(`[Sound] intentando cargar: ${filename}`);
   const s = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
     if (error) {
       console.error(`[Sound] fallo cargando ${filename}:`, error);
@@ -32,9 +38,9 @@ const loadSound = (
 };
 
 export const initializeSounds = () => {
-  // 🎶 Música de fondo
+  // Música de fondo
   loadSound(
-    'waitingtime', // ⚠️ sin extensión
+    'waitingtime',
     (sound) => {
       backgroundMusic = sound;
       backgroundMusic.setNumberOfLoops(-1);
@@ -43,24 +49,44 @@ export const initializeSounds = () => {
     (error) => console.error('Música:', error)
   );
 
-  // 💥 Sonido de golpe
-  hitSoundPool = new Array(HIT_POOL_SIZE).fill(null);
-  for (let i = 0; i < HIT_POOL_SIZE; i++) {
+  // Sonidos de golpe (varios diferentes)
+  hitSoundPool = [];
+  hitFiles.forEach((file) => {
     loadSound(
-      'fartsound', // ⚠️ sin extensión
+      file,
       (sound) => {
         sound.setVolume(0.7);
-        hitSoundPool[i] = sound;
+        hitSoundPool.push(sound);
       },
-      (error) => console.error(`Golpe[${i}]:`, error)
+      (error) => console.error(`Golpe ${file}:`, error)
     );
-  }
+  });
 };
 
 export const playBackgroundMusic = () => {
   if (backgroundMusic) {
     backgroundMusic.play((success) => {
       if (!success) console.warn('[Sound] Error reproduciendo música');
+    });
+  }
+};
+
+export const playVictorySound = () => {
+  if (!victorySound) {
+    loadSound(
+      victoryFile,
+      (sound) => {
+        victorySound = sound;
+        victorySound.setVolume(0.7);
+        victorySound.play((success) => {
+          if (!success) console.warn('[Sound] Error reproduciendo victoria');
+        });
+      },
+      (error) => console.error('Victoria:', error)
+    );
+  } else {
+    victorySound.play((success) => {
+      if (!success) console.warn('[Sound] Error reproduciendo victoria');
     });
   }
 };
@@ -73,9 +99,9 @@ export const stopBackgroundMusic = () => {
 
 export const playHitSound = () => {
   if (!hitSoundPool || hitSoundPool.length === 0) return;
-  const idx = hitPoolIndex % HIT_POOL_SIZE;
-  hitPoolIndex = (hitPoolIndex + 1) % HIT_POOL_SIZE;
-  const s = hitSoundPool[idx];
+
+  // Seleccionar un sonido aleatorio del pool
+  const s = hitSoundPool[Math.floor(Math.random() * hitSoundPool.length)];
   if (!s) return;
 
   s.stop(() => {
@@ -95,7 +121,6 @@ export const releaseSounds = () => {
       if (hs) hs.release();
     });
     hitSoundPool = [];
-    hitPoolIndex = 0;
   }
 };
 
