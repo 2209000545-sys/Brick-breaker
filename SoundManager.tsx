@@ -8,17 +8,18 @@ interface SoundManagerProps {
 Sound.setCategory('Playback');
 
 let backgroundMusic: Sound | null = null;
-let hitSoundPool: Array<Sound | null> = [];
+let hitSoundPool: Sound[] = [];
 let victorySound: Sound | null = null;
+let soundsReady = false;
 
-const victoryFile = 'victoria'; // ejemplo: victory.mp3
+const victoryFile = 'victoria'; // archivo en res/raw/victoria.mp3
 
 // Lista de archivos de sonidos distintos (en res/raw, sin extensión)
 const hitFiles = [
-  'hit1',   // ejemplo: hit1.mp3
-  'hit2',   // ejemplo: hit2.mp3
-  'hit3',   // ejemplo: hit3.mp3
-  'hit4'    // ejemplo: hit4.mp3
+  'hit1',   // archivo en res/raw/hit1.mp3
+  'hit2',   // archivo en res/raw/hit2.mp3
+  'hit3',   // archivo en res/raw/hit3.mp3
+  'hit4',   // archivo en res/raw/hit4.mp3
 ];
 
 const loadSound = (
@@ -28,16 +29,20 @@ const loadSound = (
 ) => {
   const s = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
     if (error) {
-      console.error(`[Sound] fallo cargando ${filename}:`, error);
+      console.warn(`[Sound] No se pudo cargar ${filename}. ¿Existe en res/raw/?`, error);
       onError(error);
       return;
     }
-    console.log(`✓ ${filename} cargado`);
+    console.log(`✓ ${filename} cargado correctamente`);
     onLoaded(s);
   });
 };
 
-export const initializeSounds = () => {
+export const initializeSounds = async () => {
+  soundsReady = false;
+  let loadedCount = 0;
+  const totalSounds = hitFiles.length + 1; // +1 para música de fondo
+
   // Música de fondo
   loadSound(
     'waitingtime',
@@ -45,11 +50,17 @@ export const initializeSounds = () => {
       backgroundMusic = sound;
       backgroundMusic.setNumberOfLoops(-1);
       backgroundMusic.setVolume(0.3);
+      loadedCount++;
+      checkIfReady();
     },
-    (error) => console.error('Música:', error)
+    (error) => {
+      console.warn('Música de fondo no disponible:', error);
+      loadedCount++;
+      checkIfReady();
+    }
   );
 
-  // Sonidos de golpe (varios diferentes)
+  // Sonidos de golpe
   hitSoundPool = [];
   hitFiles.forEach((file) => {
     loadSound(
@@ -57,32 +68,52 @@ export const initializeSounds = () => {
       (sound) => {
         sound.setVolume(0.7);
         hitSoundPool.push(sound);
+        loadedCount++;
+        checkIfReady();
       },
-      (error) => console.error(`Golpe ${file}:`, error)
+      (error) => {
+        console.warn(`Sonido ${file} no disponible:`, error);
+        loadedCount++;
+        checkIfReady();
+      }
     );
   });
+
+  const checkIfReady = () => {
+    if (loadedCount === totalSounds) {
+      soundsReady = true;
+      console.log('[Sound] Sonidos inicializados correctamente');
+    }
+  };
 };
 
 export const playBackgroundMusic = () => {
-  if (backgroundMusic) {
+  if (backgroundMusic && soundsReady) {
     backgroundMusic.play((success) => {
-      if (!success) console.warn('[Sound] Error reproduciendo música');
+      if (!success) {
+        console.warn('[Sound] Error reproduciendo música de fondo');
+      }
     });
   }
 };
 
 export const playVictorySound = () => {
+  if (!soundsReady) {
+    console.warn('Los sonidos aún no están listos');
+    return;
+  }
+  
   if (!victorySound) {
     loadSound(
       victoryFile,
       (sound) => {
         victorySound = sound;
-        victorySound.setVolume(0.7);
+        victorySound.setVolume(0.8);
         victorySound.play((success) => {
           if (!success) console.warn('[Sound] Error reproduciendo victoria');
         });
       },
-      (error) => console.error('Victoria:', error)
+      (error) => console.warn('Victoria no disponible:', error)
     );
   } else {
     victorySound.play((success) => {
@@ -98,17 +129,24 @@ export const stopBackgroundMusic = () => {
 };
 
 export const playHitSound = () => {
-  if (!hitSoundPool || hitSoundPool.length === 0) return;
+  if (!soundsReady || !hitSoundPool || hitSoundPool.length === 0) {
+    console.warn('Sonidos de golpe no disponibles');
+    return;
+  }
 
   // Seleccionar un sonido aleatorio del pool
-  const s = hitSoundPool[Math.floor(Math.random() * hitSoundPool.length)];
-  if (!s) return;
-
-  s.stop(() => {
-    s.play((success) => {
-      if (!success) console.warn('[Sound] Error reproduciendo golpe');
+  const randomIndex = Math.floor(Math.random() * hitSoundPool.length);
+  const sound = hitSoundPool[randomIndex];
+  
+  if (sound) {
+    sound.stop(() => {
+      sound.play((success) => {
+        if (!success) {
+          console.warn('[Sound] Error reproduciendo golpe');
+        }
+      });
     });
-  });
+  }
 };
 
 export const releaseSounds = () => {
