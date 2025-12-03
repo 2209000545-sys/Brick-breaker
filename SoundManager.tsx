@@ -48,7 +48,7 @@ export const initializeSounds = async () => {
     'waitingtime',
     (sound) => {
       backgroundMusic = sound;
-      backgroundMusic.setNumberOfLoops(-1);
+      backgroundMusic.setNumberOfLoops(1000);
       backgroundMusic.setVolume(0.3);
       loadedCount++;
       checkIfReady();
