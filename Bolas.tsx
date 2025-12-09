@@ -1,21 +1,17 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Dimensions } from 'react-native';
-const { width, height } = Dimensions.get('window');
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { getLayout } from './layout';
 
-
-export default function Bola({ x, y }: { x: number; y: number }) {
-  return <View style={[styles.bola, { left: x, top: y }]} />;
+export default function Bola({ x, y, size }: { x: number; y: number; size?: number }) {
+  const { width, height } = useWindowDimensions();
+  const layout = getLayout(width, height);
+  const s = typeof size === 'number' ? size : layout.ballSize;
+  return <View style={[styles.bola, { left: x, top: y, width: s, height: s, borderRadius: s / 2 }]} />;
 }
-
-const tamanobola = Math.min(width, height) * 0.03;
 
 const styles = StyleSheet.create({
   bola: {
     position: 'absolute',
-    width: tamanobola,
-    height: tamanobola,
-    borderRadius: tamanobola / 2,
     backgroundColor: '#FFD700',
     borderColor: '#FF1493',
     borderWidth: 3,

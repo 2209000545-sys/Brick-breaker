@@ -1,39 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, PanResponder, GestureResponderEvent } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, PanResponder, GestureResponderEvent, useWindowDimensions } from 'react-native';
 import Ball from './Bolas';
 import Paddle from './Paleta';
 import ParticleEffect from './efectodeparticula';
 import Fondoanimado from './Fondoanimado';
-// Ensure the SoundManager file exists and is correctly exported
-import { initializeSounds, playHitSound, releaseSounds, playBackgroundMusic, stopBackgroundMusic, playVictorySound } from './SoundManager'; // Check if this path is correct
-
+import { initializeSounds, playHitSound, releaseSounds, playBackgroundMusic, stopBackgroundMusic, playVictorySound, playGameOverSound } from './SoundManager';
+import { getLayout } from './layout';
+// Tamaños responsivos basados en las dimensiones del dispositivo
 const { width, height } = Dimensions.get('window');
 
-const Paletaancho = 100;
-const Paletaalto = 160;
-const tamanobola = 20;
-const Paletabaja = 40;
 
-// Powerup config
-const POWERUP_SIZE = 20;
 type PowerupType = 'expand' | 'slow' | 'score' | 'shield' | 'multiplier';
 type Powerup = { id: string; x: number; y: number; type: PowerupType; dy: number };
-// added types
+// Tipos añadidos
 type ExtendedPowerupType = PowerupType | 'sticky' | 'pierce';
 
-const Bloqueancho = 56;
-const Bloquealto = 20;
 const columnas = 6;
+// Los tamaños de los bloques se calculan por dispositivo dentro del componente
 
 const blockColors = ['#FF006E', '#FB5607', '#FFBE0B', '#8338EC', '#3A86FF', '#06FFA5'];
 
-const crearBloques = (filas: number) => {
+const crearBloques = (filas: number, blockW: number, blockH: number) => {
   return Array.from({ length: columnas * filas }).map((_, i) => {
     const col = i % columnas;
     const row = Math.floor(i / columnas);
     return {
-      x: col * (Bloqueancho + 10) + 10,
-      y: row * (Bloquealto + 10) + 90,
+      x: col * (blockW + 10) + 10,
+      y: row * (blockH + 10) + 90,
       visible: true,
       color: blockColors[(col + row) % blockColors.length],
     };
@@ -47,10 +40,26 @@ const difficultySettings: Record<string, { rows: number; speed: number }> = {
 };
 
 export default function GameScreen() {
-  const [paddleWidth, setPaddleWidth] = useState(Paletaancho);
+  const window = useWindowDimensions();
+  const lw = window.width;
+  const lh = window.height;
+
+  const layout = getLayout(lw, lh);
+  const {
+    paddleWidth: paddleBase,
+    paddleHeight,
+    paddleBottom,
+    ballSize,
+    powerupSize,
+    blockWidth: blockW,
+    blockHeight: blockH,
+    touchZoneHeight,
+  } = layout;
+
+  const [paddleWidth, setPaddleWidth] = useState(paddleBase);
   const paddleWidthRef = useRef(paddleWidth);
-  const [paletaX, setPaletaX] = useState(width / 2 - Paletaancho / 2);
-  const [gameState, setGameState] = useState<'menu' | 'playing' | 'victory'>('menu');
+  const [paletaX, setPaletaX] = useState(lw / 2 - paddleBase / 2);
+  const [gameState, setGameState] = useState<'menu' | 'playing' | 'victory' | 'gameover'>('menu');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [score, setScore] = useState(0);
   const [lastScore, setLastScore] = useState<number | null>(null);
@@ -61,9 +70,9 @@ export default function GameScreen() {
     dy: -difficultySettings.medium.speed,
   });
   const [particleTrigger, setParticleTrigger] = useState(false);
-  const [bloques, setBloques] = useState(() => crearBloques(difficultySettings.medium.rows));
+  const [bloques, setBloques] = useState(() => crearBloques(difficultySettings.medium.rows, blockW, blockH));
 
-  // Refs para optimización - evitar re-renders innecesarios
+  // optimización - evitar re-renders innecesarios
   const touchPositionRef = useRef<number | null>(null);
   const touchStartTimeRef = useRef<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
@@ -84,7 +93,7 @@ export default function GameScreen() {
   const activePowerupsRef = useRef(activePowerups);
   useEffect(() => { activePowerupsRef.current = activePowerups; }, [activePowerups]);
 
-  // Helper to apply powerup effects centrally
+  //auxiliar para aplicar efectos de powerup de forma centralizada
   const applyPowerup = (pu: Powerup) => {
     const now = Date.now();
     if (pu.type === 'expand') {
@@ -95,7 +104,7 @@ export default function GameScreen() {
       const expiresAt = now + 10000;
       setActivePowerups(prev => [...prev, { id: pu.id, type: pu.type, expiresAt }]);
       const t = setTimeout(() => {
-        setPaddleWidth(Paletaancho);
+        setPaddleWidth(paddleBase);
         setActivePowerups(prev => prev.filter(p => p.id !== pu.id));
       }, 10000);
       activeTimersRef.current.push(t as unknown as number);
@@ -108,25 +117,25 @@ export default function GameScreen() {
       const expiresAt = now + 6000;
       setActivePowerups(prev => [...prev, { id: pu.id, type: pu.type, expiresAt }]);
       const t = setTimeout(() => {
-        setBola(prevB => ({ ...prevB, dx: prevB.dx / 0.6, dy: prevB.dy / 0.6 }));
-        setActivePowerups(prev => prev.filter(p => p.id !== pu.id));
-      }, 6000);
+          setBola(prevB => ({ ...prevB, dx: prevB.dx / 0.6, dy: prevB.dy / 0.6 }));
+          setActivePowerups(prev => prev.filter(p => p.id !== pu.id));
+        }, 6000);
       activeTimersRef.current.push(t as unknown as number);
     } else if (pu.type === 'score') {
       setScore(s => s + Math.round(5 * multiplierRef.current));
-      // instant, no indicator
+      // instantáneo, sin indicador
     } else if (pu.type === 'shield') {
       shieldRef.current = true;
       setActivePowerups(prev => [...prev, { id: pu.id, type: pu.type, expiresAt: null }]);
-      // shield persists until consumed
+      // el escudo persiste hasta ser consumido
     } else if (pu.type === 'multiplier') {
       multiplierRef.current = 2;
       const expiresAt = now + 8000;
       setActivePowerups(prev => [...prev, { id: pu.id, type: pu.type, expiresAt }]);
       const t = setTimeout(() => {
-        multiplierRef.current = 1;
-        setActivePowerups(prev => prev.filter(p => p.id !== pu.id));
-      }, 8000);
+          multiplierRef.current = 1;
+          setActivePowerups(prev => prev.filter(p => p.id !== pu.id));
+        }, 8000);
       activeTimersRef.current.push(t as unknown as number);
     } else if ((pu as any).type === 'sticky') {
       stickyRef.current = true;
@@ -173,26 +182,29 @@ export default function GameScreen() {
   const startGame = (level: 'easy' | 'medium' | 'hard') => {
     setDifficulty(level);
     const { rows, speed } = difficultySettings[level];
-    setBloques(crearBloques(rows));
+    setBloques(crearBloques(rows, blockW, blockH));
     setScore(0);
     setGameState('playing');
     setBola({
-      x: width / 2,
-      y: height / 2,
+      x: lw / 2,
+      y: lh / 2,
       dx: speed,
       dy: -speed,
     });
-    // reset paddle width and powerups
-    setPaddleWidth(Paletaancho);
+    // restablecer ancho de paleta y powerups
+    setPaddleWidth(paddleBase);
     powerupsRef.current = [];
     setPowerups([]);
-    // set number of powerups to spawn based on difficulty
+    setActivePowerups([]);
+    // establecer número de powerups a generar según la dificultad
     const spawnCounts: Record<string, number> = { easy: 6, medium: 3, hard: 2 };
     spawnRemainingRef.current = spawnCounts[level] || 3;
-    // reset shield / multiplier
+    // restablecer escudo / multiplicador
     shieldRef.current = false;
     multiplierRef.current = 1;
-    // clear any active timers
+    stickyRef.current = false;
+    pierceRef.current = false;
+    // limpiar cualquier temporizador activo
     activeTimersRef.current.forEach(id => clearTimeout(id));
     activeTimersRef.current = [];
   };
@@ -213,6 +225,22 @@ export default function GameScreen() {
     } else if (gameState !== 'playing') {
       musicStartedRef.current = false;
       stopBackgroundMusic();
+    }
+  }, [gameState]);
+
+  // Limpiar temporizadores y powerups activos al salir del estado de juego para evitar indicadores atascados
+  useEffect(() => {
+    if (gameState !== 'playing') {
+      // limpiar temporizadores programados
+      activeTimersRef.current.forEach(id => clearTimeout(id));
+      activeTimersRef.current = [];
+      // borrar indicadores de powerups activos
+      setActivePowerups([]);
+      // restablecer banderas de efectos
+      stickyRef.current = false;
+      pierceRef.current = false;
+      shieldRef.current = false;
+      multiplierRef.current = 1;
     }
   }, [gameState]);
 
@@ -240,13 +268,13 @@ export default function GameScreen() {
         let dy = prev.dy;
 
         // Rebote en bordes
-        if (newX <= 0 || newX >= width - tamanobola) dx *= -1;
+        if (newX <= 0 || newX >= lw - ballSize) dx *= -1;
         if (newY <= 0) dy *= -1;
 
-        // Colisión con paleta
-        const paletaY = height - Paletabaja - Paletaalto;
-        const ballBottom = newY + tamanobola;
-        const ballCenterX = newX + tamanobola / 2;
+        // Colisión con paleta (usar dimensiones locales)
+        const paletaY = lh - paddleBottom - paddleHeight;
+        const ballBottom = newY + ballSize;
+        const ballCenterX = newX + ballSize / 2;
 
         // Rebote solo en la parte superior de la paleta
         const pegarpaleta =
@@ -266,7 +294,7 @@ export default function GameScreen() {
           dx = Math.sin(angle) * speed;
           dy = -Math.abs(Math.cos(angle) * speed);
           
-          newY = paletaY - tamanobola;
+          newY = paletaY - ballSize;
           setParticleTrigger(true);
           playHitSound();
           setTimeout(() => setParticleTrigger(false), 100);
@@ -279,24 +307,24 @@ export default function GameScreen() {
         bloqueRef.current.forEach((bloque, index) => {
           if (!bloque.visible) return;
 
-          const ballRight = newX + tamanobola;
-          const ballBottom = newY + tamanobola;
+          const ballRight = newX + ballSize;
+          const ballBottom = newY + ballSize;
 
           const colisiona =
             ballRight >= bloque.x &&
-            newX <= bloque.x + Bloqueancho &&
+            newX <= bloque.x + blockW &&
             ballBottom >= bloque.y &&
-            newY <= bloque.y + Bloquealto;
+            newY <= bloque.y + blockH;
 
             if (colisiona) {
               // determine collision axis by overlap depths
               const blockLeft = bloque.x;
-              const blockRight = bloque.x + Bloqueancho;
+              const blockRight = bloque.x + blockW;
               const blockTop = bloque.y;
-              const blockBottom = bloque.y + Bloquealto;
+              const blockBottom = bloque.y + blockH;
 
-              const overlapX = Math.min(newX + tamanobola - blockLeft, blockRight - newX);
-              const overlapY = Math.min(newY + tamanobola - blockTop, blockBottom - newY);
+              const overlapX = Math.min(newX + ballSize - blockLeft, blockRight - newX);
+              const overlapY = Math.min(newY + ballSize - blockTop, blockBottom - newY);
 
               bloquesActualizados[index].visible = false;
             colisionDetectada = true;
@@ -335,8 +363,8 @@ export default function GameScreen() {
               }
               const pu: Powerup = {
                 id: `pu-${Date.now()}-${index}`,
-                x: bloque.x + Bloqueancho / 2 - POWERUP_SIZE / 2,
-                y: bloque.y + Bloquealto / 2,
+                x: bloque.x + blockW / 2 - powerupSize / 2,
+                y: bloque.y + blockH / 2,
                 type: chosen,
                 dy: 2,
               };
@@ -355,22 +383,21 @@ export default function GameScreen() {
 
         // Update powerups positions and check collection
         if (powerupsRef.current.length > 0) {
-          const paletaY = height - Paletabaja - Paletaalto;
+          const paletaY = lh - paddleBottom - paddleHeight;
           const newPowerups: Powerup[] = [];
           for (const pu of powerupsRef.current) {
             const newPu = { ...pu, y: pu.y + pu.dy };
             // check if collected by paddle
-            const puCenterX = newPu.x + POWERUP_SIZE / 2;
+            const puCenterX = newPu.x + powerupSize / 2;
             if (
-              newPu.y + POWERUP_SIZE >= paletaY &&
+              newPu.y + powerupSize >= paletaY &&
               puCenterX >= paletaXRef.current &&
               puCenterX <= paletaXRef.current + paddleWidthRef.current
             ) {
               // apply effect
-              // apply effects via centralized helper; map extended types
               applyPowerup({ ...newPu, type: newPu.type as any });
               // collected -> don't keep
-            } else if (newPu.y < height) {
+            } else if (newPu.y < lh) {
               newPowerups.push(newPu);
             }
           }
@@ -379,27 +406,32 @@ export default function GameScreen() {
         }
 
         // Reinicio si cae
-        if (newY >= height) {
+        if (newY >= lh) {
           // if player has a shield, consume it and continue
           if (shieldRef.current) {
             shieldRef.current = false;
+            // remove shield indicator
+            setActivePowerups(prev => prev.filter(p => p.type !== 'shield'));
             // reset ball above paddle with small upward velocity
             return {
-              x: paletaXRef.current + paddleWidthRef.current / 2 - tamanobola / 2,
-              y: height - Paletabaja - Paletaalto - tamanobola,
+              x: paletaXRef.current + paddleWidthRef.current / 2 - ballSize / 2,
+              y: lh - paddleBottom - paddleHeight - ballSize,
               dx: (difficultySettings[difficultyRef.current]?.speed || 2) * (Math.random() > 0.5 ? 1 : -1),
               dy: -Math.abs(dy) || -2,
             } as any;
           }
 
+          // No shield -> Game Over
           setLastScore(score);
-          setGameState('menu');
+          setGameState('gameover');
+          stopBackgroundMusic();
+          playGameOverSound();
           const rows = difficultyRef.current ? difficultySettings[difficultyRef.current].rows : 4;
-          setBloques(crearBloques(rows));
+          setBloques(crearBloques(rows, blockW, blockH));
 
           return {
-            x: paletaXRef.current + paddleWidthRef.current / 2 - tamanobola / 2,
-            y: height - Paletabaja - Paletaalto - tamanobola,
+            x: paletaXRef.current + paddleWidthRef.current / 2 - ballSize / 2,
+            y: lh - paddleBottom - paddleHeight - ballSize,
             dx: 0.1,
             dy: 0.1,
           };
@@ -431,28 +463,33 @@ export default function GameScreen() {
       <Fondoanimado />
       {gameState === 'playing' && (
         <View style={styles.scoreBar}>
-          <Text style={styles.scoreText}>Puntuación: {score}</Text>
-          <Text style={styles.scoreText}>
-            Dificultad: {difficulty === 'easy' ? 'Fácil' : difficulty === 'medium' ? 'Medio' : 'Difícil'}
-          </Text>
-        </View>
-      )}
-      {/* Powerup indicators (top-right) */}
-      {activePowerups.length > 0 && (
-        <View style={styles.powerupIndicatorContainer} pointerEvents="none">
-          {activePowerups.map(p => {
-            const remaining = p.expiresAt ? Math.max(0, Math.ceil((p.expiresAt - Date.now()) / 1000)) : null;
-            const bg = p.type === 'expand' ? '#00FF88' : p.type === 'slow' ? '#3A86FF' : p.type === 'score' ? '#FFBE0B' : p.type === 'shield' ? '#FF006E' : '#FFD700';
-            const icon = p.type === 'expand' ? '↔️' : p.type === 'slow' ? '🐢' : p.type === 'score' ? '⭐' : p.type === 'shield' ? '🛡️' : '×2';
-            return (
-              <View key={`ind-${p.id}`} style={[styles.powerupPill, { backgroundColor: bg }]}>
-                <Text style={styles.powerupPillText}>{icon}{remaining ? ` ${remaining}s` : ''}</Text>
+          <View style={styles.scoreLeft}>
+            <Text style={styles.scoreText}>Puntuación: {score}</Text>
+          </View>
+          <View style={styles.scoreCenter} pointerEvents="none">
+            {activePowerups.length > 0 && (
+              <View style={styles.powerupRow}>
+                {activePowerups.map(p => {
+                  const remaining = p.expiresAt ? Math.max(0, Math.ceil((p.expiresAt - Date.now()) / 1000)) : null;
+                  const bg = p.type === 'expand' ? '#00FF88' : p.type === 'slow' ? '#3A86FF' : p.type === 'score' ? '#FFBE0B' : p.type === 'shield' ? '#FF006E' : '#FFD700';
+                  const icon = p.type === 'expand' ? '↔️' : p.type === 'slow' ? '🐢' : p.type === 'score' ? '⭐' : p.type === 'shield' ? '🛡️' : '×2';
+                  return (
+                    <View key={`ind-${p.id}`} style={[styles.powerupPill, { backgroundColor: bg, marginLeft: 6 }]}>
+                      <Text style={styles.powerupPillText}>{icon}{remaining ? ` ${remaining}s` : ''}</Text>
+                    </View>
+                  );
+                })}
               </View>
-            );
-          })}
+            )}
+          </View>
+          <View style={styles.scoreRight}>
+            <Text style={styles.scoreText}>
+              Dificultad: {difficulty === 'easy' ? 'Fácil' : difficulty === 'medium' ? 'Medio' : 'Difícil'}
+            </Text>
+          </View>
         </View>
       )}
-      <Ball x={bola.x} y={bola.y} />
+      <Ball x={bola.x} y={bola.y} size={ballSize} />
       <ParticleEffect x={bola.x} y={bola.y} trigger={particleTrigger} />
       {bloques.map((bloque, i) =>
         bloque.visible ? (
@@ -460,7 +497,7 @@ export default function GameScreen() {
             key={`bloque-${i}`}
             style={[
               styles.bloque,
-              { left: bloque.x, top: bloque.y, backgroundColor: (bloque as any).color || '#FF006E' },
+              { left: bloque.x, top: bloque.y, width: blockW, height: blockH, backgroundColor: (bloque as any).color || '#FF006E' },
             ]}
           />
         ) : null
@@ -472,8 +509,8 @@ export default function GameScreen() {
             position: 'absolute',
             left: pu.x,
             top: pu.y,
-            width: POWERUP_SIZE,
-            height: POWERUP_SIZE,
+            width: powerupSize,
+            height: powerupSize,
             borderRadius: 6,
             backgroundColor:
               pu.type === 'expand' ? '#00FF88' : pu.type === 'slow' ? '#3A86FF' : pu.type === 'score' ? '#FFBE0B' : pu.type === 'shield' ? '#FF006E' : '#FFD700',
@@ -487,12 +524,12 @@ export default function GameScreen() {
           </Text>
         </View>
       ))}
-      <Paddle x={paletaX} width={paddleWidth} />
+      <Paddle x={paletaX} width={paddleWidth} height={paddleHeight} bottomOffset={paddleBottom} />
 
       {/* Touch zone para controlar la paleta - solo parte inferior */}
       {gameState === 'playing' && (
         <View
-          style={styles.touchZone}
+          style={[styles.touchZone, { height: touchZoneHeight }]}
           onTouchStart={(e: GestureResponderEvent) => {
             touchPositionRef.current = e.nativeEvent.locationX;
             touchStartTimeRef.current = Date.now();
@@ -573,6 +610,28 @@ export default function GameScreen() {
           </View>
         </View>
       )}
+      {gameState === 'gameover' && (
+        <View style={styles.menuOverlay} pointerEvents="box-none">
+          <View style={[styles.menuBox, styles.gameOverBox]}>
+            <Text style={styles.victoryTitle}>GAME OVER</Text>
+            <Text style={styles.victoryScore}>Puntuación: {lastScore ?? score}</Text>
+            <View style={styles.menuButtons}>
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={() => startGame(difficulty)}
+              >
+                <Text style={styles.menuButtonText}>Reintentar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={() => setGameState('menu')}
+              >
+                <Text style={styles.menuButtonText}>Menú</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -586,8 +645,6 @@ const styles = StyleSheet.create({
   },
   bloque: {
     position: 'absolute',
-    width: Bloqueancho,
-    height: Bloquealto,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: '#fff',
@@ -600,17 +657,17 @@ const styles = StyleSheet.create({
   },
   scoreBar: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
+    top: Math.max(8, Math.round(height * 0.015)),
+    left: Math.max(8, Math.round(width * 0.02)),
+    right: Math.max(8, Math.round(width * 0.02)),
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(12, Math.round(width * 0.03)),
+    paddingVertical: Math.max(8, Math.round(height * 0.01)),
     backgroundColor: '#FFD700',
-    borderRadius: 14,
-    borderWidth: 3,
+    borderRadius: 12,
+    borderWidth: 2,
     borderColor: '#FF1493',
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
@@ -684,6 +741,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a3a1a',
     borderColor: '#00FF88',
   },
+  gameOverBox: {
+    backgroundColor: '#3a1a1a',
+    borderColor: '#FF006E',
+  },
   victoryTitle: {
     color: '#00FF88',
     fontSize: 36,
@@ -699,18 +760,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 24,
   },
-  powerupIndicatorContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    zIndex: 20,
-  },
   powerupPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginLeft: 8,
+    paddingHorizontal: Math.max(5, Math.round(width * 0.008)),
+    paddingVertical: Math.max(3, Math.round(height * 0.004)),
+    borderRadius: 10,
+    marginLeft: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.4,
@@ -726,7 +780,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 150, // altura de la zona de touch (cubre la paleta y área alrededor)
     zIndex: 15,
+  },
+  scoreLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  scoreCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  powerupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -10,9 +10,11 @@ Sound.setCategory('Playback');
 let backgroundMusic: Sound | null = null;
 let hitSoundPool: Sound[] = [];
 let victorySound: Sound | null = null;
+let gameOverSound: Sound | null = null;
 let soundsReady = false;
 
 const victoryFile = 'victoria'; // archivo en res/raw/victoria.mp3
+const gameOverFile = 'gameover'; // archivo en res/raw/gameover.mp3
 
 // Lista de archivos de sonidos distintos (en res/raw, sin extensión)
 const hitFiles = [
@@ -41,11 +43,11 @@ const loadSound = (
 export const initializeSounds = async () => {
   soundsReady = false;
   let loadedCount = 0;
-  const totalSounds = hitFiles.length + 1; // +1 para música de fondo
+  const totalSounds = hitFiles.length + 3; // music + victory + game over + hit files
 
   // Música de fondo
   loadSound(
-    'waitingtime',
+    'musicgame',
     (sound) => {
       backgroundMusic = sound;
       backgroundMusic.setNumberOfLoops(1000);
@@ -78,6 +80,38 @@ export const initializeSounds = async () => {
       }
     );
   });
+
+  // Pre-cargar sonido de victoria
+  loadSound(
+    victoryFile,
+    (sound) => {
+      victorySound = sound;
+      victorySound.setVolume(0.8);
+      loadedCount++;
+      checkIfReady();
+    },
+    (error) => {
+      console.warn('Victoria no disponible:', error);
+      loadedCount++;
+      checkIfReady();
+    }
+  );
+
+  // Pre-cargar sonido de game over
+  loadSound(
+    gameOverFile,
+    (sound) => {
+      gameOverSound = sound;
+      gameOverSound.setVolume(0.8);
+      loadedCount++;
+      checkIfReady();
+    },
+    (error) => {
+      console.warn('Game Over no disponible:', error);
+      loadedCount++;
+      checkIfReady();
+    }
+  );
 
   const checkIfReady = () => {
     if (loadedCount === totalSounds) {
@@ -118,6 +152,31 @@ export const playVictorySound = () => {
   } else {
     victorySound.play((success) => {
       if (!success) console.warn('[Sound] Error reproduciendo victoria');
+    });
+  }
+};
+
+export const playGameOverSound = () => {
+  if (!soundsReady) {
+    console.warn('Los sonidos aún no están listos');
+    return;
+  }
+  
+  if (!gameOverSound) {
+    loadSound(
+      gameOverFile,
+      (sound) => {
+        gameOverSound = sound;
+        gameOverSound.setVolume(0.8);
+        gameOverSound.play((success) => {
+          if (!success) console.warn('[Sound] Error reproduciendo game over');
+        });
+      },
+      (error) => console.warn('Game Over no disponible:', error)
+    );
+  } else {
+    gameOverSound.play((success) => {
+      if (!success) console.warn('[Sound] Error reproduciendo game over');
     });
   }
 };
